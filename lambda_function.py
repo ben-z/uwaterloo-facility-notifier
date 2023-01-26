@@ -12,7 +12,7 @@ FACILITY_WEB_UI_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetSchedu
 CALENDAR_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetScheduleCustomAppointments?selectedId={facilityId}&start={start}&end={end}"
 LOOKAHEAD_DAYS = 7
 LOOKAHEAD_TIME = timedelta(days=LOOKAHEAD_DAYS)
-DISCORD_WEBHOOK_URL = os.environ['DISCORD_WEBHOOK_URL']
+DISCORD_WEBHOOK_URLS = os.environ['DISCORD_WEBHOOK_URLS'].split(",")
 
 DYNAMODB_TABLE_NAME = "uwaterloo-facility-notifier-db"
 
@@ -166,32 +166,33 @@ def lambda_handler(event, context):
         )
 
     # if changes:
-    requests.post(DISCORD_WEBHOOK_URL, json={
-        "username": BOT_USERNAME,
-        "avatar_url": BOT_AVATAR_URL,
-        "embeds": [ {
-                "author": {
-                    "name": f"{BOT_USERNAME} has an update!",
-                    "icon_url": BOT_AVATAR_URL,
+    for webhook_url in DISCORD_WEBHOOK_URLS:
+        requests.post(webhook_url, json={
+            "username": BOT_USERNAME,
+            "avatar_url": BOT_AVATAR_URL,
+            "embeds": [ {
+                    "author": {
+                        "name": f"{BOT_USERNAME} has an update!",
+                        "icon_url": BOT_AVATAR_URL,
+                    },
+                }
+            ] + changes + [
+                {
+                    "fields": [
+                        {
+                            "name": f"Open Rec Skate sessions at CIF in the next {LOOKAHEAD_DAYS} days",
+                            "value": "".join(f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in cal_entries),
+                            "color": 1127128
+                        },
+                        {
+                            "name": "",
+                            "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=FACILITY_ID)})",
+                        },
+                    ],
+                    "timestamp": now.isoformat(),
                 },
-            }
-        ] + changes + [
-            {
-                "fields": [
-                    {
-                        "name": f"Open Rec Skate sessions at CIF in the next {LOOKAHEAD_DAYS} days",
-                        "value": "".join(f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in cal_entries),
-                        "color": 1127128
-                    },
-                    {
-                        "name": "",
-                        "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=FACILITY_ID)})",
-                    },
-                ],
-                "timestamp": now.isoformat(),
-            },
-        ],
-    })
+            ],
+        })
 
     if old_cal_entries != cal_entries:
         table.put('cal_entries', cal_entries)
