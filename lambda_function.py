@@ -143,7 +143,7 @@ def lambda_handler(event, context):
                 "fields": [
                     {
                         "name": "Cancelled Open Rec Skate Sessions",
-                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}" for e in deleted_upcoming_entries]),
+                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in deleted_upcoming_entries]),
                     },
                 ],
                 'color': '16711680', # red
@@ -157,7 +157,7 @@ def lambda_handler(event, context):
                 'fields': [
                     {
                         "name": "New Open Rec Skate Sessions",
-                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}" for e in new_upcoming_entries]),
+                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in new_upcoming_entries]),
                     }
                 ],
                 'color': '65280', # green
