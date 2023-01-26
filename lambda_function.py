@@ -165,34 +165,34 @@ def lambda_handler(event, context):
             }
         )
 
-    # if changes:
-    for webhook_url in DISCORD_WEBHOOK_URLS:
-        requests.post(webhook_url, json={
-            "username": BOT_USERNAME,
-            "avatar_url": BOT_AVATAR_URL,
-            "embeds": [ {
-                    "author": {
-                        "name": f"{BOT_USERNAME} has an update!",
-                        "icon_url": BOT_AVATAR_URL,
+    if changes:
+        for webhook_url in DISCORD_WEBHOOK_URLS:
+            requests.post(webhook_url, json={
+                "username": BOT_USERNAME,
+                "avatar_url": BOT_AVATAR_URL,
+                "embeds": [ {
+                        "author": {
+                            "name": f"{BOT_USERNAME} has an update!",
+                            "icon_url": BOT_AVATAR_URL,
+                        },
+                    }
+                ] + changes + [
+                    {
+                        "fields": [
+                            {
+                                "name": f"Open Rec Skate sessions at CIF in the next {LOOKAHEAD_DAYS} days",
+                                "value": "".join(f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in cal_entries),
+                                "color": 1127128
+                            },
+                            {
+                                "name": "",
+                                "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=FACILITY_ID)})",
+                            },
+                        ],
+                        "timestamp": now.isoformat(),
                     },
-                }
-            ] + changes + [
-                {
-                    "fields": [
-                        {
-                            "name": f"Open Rec Skate sessions at CIF in the next {LOOKAHEAD_DAYS} days",
-                            "value": "".join(f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in cal_entries),
-                            "color": 1127128
-                        },
-                        {
-                            "name": "",
-                            "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=FACILITY_ID)})",
-                        },
-                    ],
-                    "timestamp": now.isoformat(),
-                },
-            ],
-        })
+                ],
+            })
 
     if old_cal_entries != cal_entries:
         table.put('cal_entries', cal_entries)
