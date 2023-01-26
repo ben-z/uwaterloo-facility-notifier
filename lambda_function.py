@@ -1,7 +1,9 @@
+import boto3
 from datetime import datetime, timedelta
 import dateutil.parser
 import json
 import pytz
+import os
 import requests
 
 TZ = pytz.timezone('US/Eastern')
@@ -11,6 +13,11 @@ CALENDAR_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetScheduleCusto
 LOOKAHEAD_DAYS = 7
 LOOKAHEAD_TIME = timedelta(days=LOOKAHEAD_DAYS)
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1068228337459265596/BgHIZTxLcW3qQ5gPUkawOOR1SusT_IoEAJHM0rJ0ZI2Qou8wrE7VBWG9ljFUC18a04Rz"
+
+DYNAMODB_TABLE_NAME = "uwaterloo-facility-notifier-db"
+
+BOT_USERNAME = "sk8rgoose"
+BOT_AVATAR_URL = "https://i.imgur.com/7OMGH86.png"
 
 def filter_events(events):
     # Filter out events that are not for the CIF Arena
@@ -35,9 +42,74 @@ def pretty_print_time_range(start: str, end: str):
     else:
         return f"{start.strftime('%a %b %d %I:%M%p')} - {end.strftime('%a %b %d %I:%M%p')}"
 
+def get_dynamodb_config():
+    dynamodb_config = {}
+
+    if os.environ.get('CUSTOM_AWS_ACCESS_KEY_ID'):
+        dynamodb_config['aws_access_key_id'] = os.environ.get('CUSTOM_AWS_ACCESS_KEY_ID')
+    if os.environ.get('CUSTOM_AWS_SECRET_ACCESS_KEY'):
+        dynamodb_config['aws_secret_access_key'] = os.environ.get('CUSTOM_AWS_SECRET_ACCESS_KEY')
+
+    dynamodb_config['region_name'] = 'us-east-2'
+
+    return dynamodb_config
+
+class DynamoDBTable:
+    def __init__(self, table_name):
+        self.dynamodb_config = get_dynamodb_config()
+
+        self.dynamodb = boto3.resource('dynamodb', **self.dynamodb_config)
+        self.table_name = table_name
+        self.create_table()
+        self.table = self.dynamodb.Table(self.table_name)
+
+    def create_table(self):
+        try:
+            self.dynamodb.create_table(**{
+                "TableName": self.table_name,
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": 'PROVISIONED',
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 1,
+                    "WriteCapacityUnits": 1
+                },
+                "TableClass": "STANDARD",
+            })
+        except self.dynamodb.meta.client.exceptions.ResourceInUseException:
+            # Table already exists
+            pass
+    
+    def get(self, id):
+        response = self.table.get_item(Key={'id': id})
+        if 'Item' in response:
+            return response['Item']['value']
+        else:
+            return None
+        
+    def put(self, id, value):
+        self.table.put_item(Item={'id': id, 'value': value})
+    
+    def delete(self, id):
+        self.table.delete_item(Key={'id': id})
+
 def lambda_handler(event, context):
     # current time in the timezone TZ
     now = datetime.now(TZ)
+
+    table = DynamoDBTable(DYNAMODB_TABLE_NAME)
+
+    old_cal_entries = table.get('cal_entries') or []
 
     # beginning of day today
     start = now.strftime('%Y-%m-%dT00:00:00%z')
@@ -59,16 +131,79 @@ def lambda_handler(event, context):
 
     cal_entries = filter_events(r.json())
 
-    # Send a message to Discord if there are any events
-    message = f"**Open Rec Skate sessions at the CIF Arena in the next {LOOKAHEAD_DAYS} days:**\n"
-    for e in cal_entries:
-        message += f"{pretty_print_time_range(e['start'],e['end'])}\n"
-    message += f"Check the calendar at {FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=FACILITY_ID)}"
-    requests.post(DISCORD_WEBHOOK_URL, json={"content": message})
+    deleted_upcoming_entries = [e for e in old_cal_entries if e not in cal_entries and dateutil.parser.parse(e['start']) > now.replace(tzinfo=None)]
+    new_upcoming_entries = [e for e in cal_entries if e not in old_cal_entries and dateutil.parser.parse(e['start']) > now.replace(tzinfo=None)]
+
+    changes = []
+
+    # Send a message to Discord if there are any changes
+    if deleted_upcoming_entries:
+        changes.append(
+            {
+                "fields": [
+                    {
+                        "name": "Cancelled Open Rec Skate Sessions",
+                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}" for e in deleted_upcoming_entries]),
+                    },
+                ],
+                'color': '16711680', # red
+                "timestamp": now.isoformat(),
+            }
+        )
+
+    if new_upcoming_entries:
+        changes.append(
+            {
+                'fields': [
+                    {
+                        "name": "New Open Rec Skate Sessions",
+                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}" for e in new_upcoming_entries]),
+                    }
+                ],
+                'color': '65280', # green
+                "timestamp": now.isoformat(),
+            }
+        )
+
+    # if changes:
+    requests.post(DISCORD_WEBHOOK_URL, json={
+        "username": BOT_USERNAME,
+        "avatar_url": BOT_AVATAR_URL,
+        "embeds": [ {
+                "author": {
+                    "name": f"{BOT_USERNAME} has an update!",
+                    "icon_url": BOT_AVATAR_URL,
+                },
+            }
+        ] + changes + [
+            {
+                "fields": [
+                    {
+                        "name": f"Open Rec Skate sessions at CIF in the next {LOOKAHEAD_DAYS} days",
+                        "value": "".join(f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in cal_entries),
+                        "color": 1127128
+                    },
+                    {
+                        "name": "",
+                        "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=FACILITY_ID)})",
+                    },
+                ],
+                "timestamp": now.isoformat(),
+            },
+        ],
+    })
+
+    if old_cal_entries != cal_entries:
+        table.put('cal_entries', cal_entries)
 
     return {
         'statusCode': 200,
-        'body': json.dumps(cal_entries)
+        'body': json.dumps({
+            'num_old_cal_entries': len(old_cal_entries),
+            'num_cal_entries': len(cal_entries),
+            'old_cal_entries': old_cal_entries,
+            'cal_entries': cal_entries,
+        })
     }
 
 if __name__ == "__main__":
