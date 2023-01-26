@@ -1,5 +1,7 @@
 # UWaterloo Facility Notifier
 
+Lambda function to send Discord notifications when the UWaterloo facility calendar changes
+
 ### Testing
 
 Install dependencies:
