@@ -1,7 +1,8 @@
 # UWaterloo Facility Notifier
 
 Lambda function to send Discord notifications when the UWaterloo facility calendar changes
-![image](https://user-images.githubusercontent.com/5977478/214961218-5e39fc69-c043-4fe5-8cf4-c488640aa1cc.png)
+
+<img width="453" alt="image" src="https://user-images.githubusercontent.com/5977478/214961417-269239d0-7453-403e-962f-5e0a13f14d1a.png">
 
 ### Testing
 
