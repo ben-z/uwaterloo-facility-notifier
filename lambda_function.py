@@ -12,7 +12,7 @@ FACILITY_WEB_UI_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetSchedu
 CALENDAR_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetScheduleCustomAppointments?selectedId={facilityId}&start={start}&end={end}"
 LOOKAHEAD_DAYS = 7
 LOOKAHEAD_TIME = timedelta(days=LOOKAHEAD_DAYS)
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1068228337459265596/BgHIZTxLcW3qQ5gPUkawOOR1SusT_IoEAJHM0rJ0ZI2Qou8wrE7VBWG9ljFUC18a04Rz"
+DISCORD_WEBHOOK_URL = os.environ['DISCORD_WEBHOOK_URL']
 
 DYNAMODB_TABLE_NAME = "uwaterloo-facility-notifier-db"
 
