@@ -165,9 +165,10 @@ def lambda_handler(event, context):
             }
         )
 
+    errors = []
     if changes:
         for webhook_url in DISCORD_WEBHOOK_URLS:
-            requests.post(webhook_url, json={
+            r = requests.post(webhook_url, json={
                 "username": BOT_USERNAME,
                 "avatar_url": BOT_AVATAR_URL,
                 "embeds": [ {
@@ -193,9 +194,22 @@ def lambda_handler(event, context):
                     },
                 ],
             })
+            if r.status_code != 204:
+                errors.append({
+                    'message': f'Error: could not send Discord message (status code {r.status_code}, webhook url {webhook_url})',
+                    'error': r.text,
+                })
 
     if old_cal_entries != cal_entries:
         table.put('cal_entries', cal_entries)
+
+    if errors:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'errors': errors
+            })
+        }
 
     return {
         'statusCode': 200,
