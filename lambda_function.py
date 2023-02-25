@@ -55,10 +55,7 @@ event_configs: List[EventConfig] = [
         'facility_name': 'CIF Arena',
         'lookahead_days': 7,
         'event_name': 'Figure Skating Club',
-        'event_filter': lambda e:
-        'figure skating' in e['title'].lower()
-            and "club" in e['title'].lower()
-            and "hold" not in e['title'].lower(),
+        'event_filter': lambda e: 'figure skating' in e['title'].lower() and "club" in e['title'].lower() and "hold" not in e['title'].lower(),
     }),
 ]
 
