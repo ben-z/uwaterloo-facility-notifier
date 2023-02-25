@@ -134,6 +134,9 @@ class DynamoDBTable:
                 },
                 "TableClass": "STANDARD",
             })
+
+            self.dynamodb.meta.client.get_waiter('table_exists').wait(
+                TableName=self.table_name)
         except self.dynamodb.meta.client.exceptions.ResourceInUseException:
             # Table already exists
             pass
