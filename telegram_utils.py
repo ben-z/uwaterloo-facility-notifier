@@ -10,7 +10,7 @@ from utils import (FACILITY_WEB_UI_URL_FORMATTER, ChangeType, DynamoDBTable,
 
 TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 
-TELEGRAM_WELCOME_MESSAGE = "Hi there! I'm a bot that sends updates about UWaterloo facility schedules. To subscribe to updates, please send me `/subscribe`. To unsubscribe, please send me `/unsubscribe`."
+TELEGRAM_WELCOME_MESSAGE = "Hi there! I'm a bot that sends updates about UWaterloo facility schedules. To subscribe to updates, please send me `/subscribe`. To unsubscribe, please send me `/unsubscribe`. Send me `/help` to see this message again. I reply periodically instead of on-demand, so it might take a few minutes (depending on my deployment setting) for me to respond."
 
 
 async def refresh_telegram_subscribers_async(table: DynamoDBTable):
@@ -48,7 +48,7 @@ async def refresh_telegram_subscribers_async(table: DynamoDBTable):
                     elif '/subscribe' in message_lower:
                         update_subscribers.add(effective_chat_id)
                         await bot.send_message(effective_chat_id, reply_to_message_id=update.effective_message.message_id, text="This chat has been subscribed to updates!")
-                    elif '/start' in message_lower:
+                    elif '/start' in message_lower or '/help' in message_lower:
                         await bot.send_message(effective_chat_id, reply_to_message_id=update.effective_message.message_id, text=TELEGRAM_WELCOME_MESSAGE)
                     else:
                         await bot.send_message(effective_chat_id, reply_to_message_id=update.effective_message.message_id, text="I don't understand this command. Available commands are 'subscribe' and 'unsubscribe'.")
