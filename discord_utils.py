@@ -1,17 +1,12 @@
-import concurrent.futures
-import json
 import os
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import List, Mapping, Set, Union
+from datetime import datetime
+from typing import List
 
-import dateutil.parser
 import requests
 from telegram.constants import ChatMemberStatus
 
-from utils import (CALENDAR_URL_FORMATTER, FACILITY_WEB_UI_URL_FORMATTER,
-                   ChangeType, DynamoDBTable, EventChanges, EventConfig,
-                   ReqParam, TimeRange, flatten, pretty_print_time_range)
+from utils import (FACILITY_WEB_UI_URL_FORMATTER, SOURCE_CODE_URL, ChangeType,
+                   EventChanges, EventConfig, flatten, pretty_print_time_range)
 
 DISCORD_WEBHOOK_URLS = os.environ['DISCORD_WEBHOOK_URLS'].split(",")
 
@@ -30,7 +25,7 @@ def send_discord_message(changes_list: List[EventChanges], event_configs: List[E
                 },
                 {
                     "name": "",
-                    "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=c.facility_id)})",
+                    "value": f"[facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=c.facility_id)})",
                 },
             ],
             "timestamp": now.isoformat(),

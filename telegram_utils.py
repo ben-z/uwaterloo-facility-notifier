@@ -5,8 +5,9 @@ from typing import List, Set
 import telegram
 from telegram.constants import ChatMemberStatus
 
-from utils import (FACILITY_WEB_UI_URL_FORMATTER, ChangeType, DynamoDBTable,
-                   EventChanges, EventConfig, flatten, pretty_print_time_range)
+from utils import (FACILITY_WEB_UI_URL_FORMATTER, SOURCE_CODE_URL, ChangeType,
+                   DynamoDBTable, EventChanges, EventConfig, flatten,
+                   pretty_print_time_range)
 
 TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 
@@ -51,7 +52,7 @@ async def refresh_telegram_subscribers_async(table: DynamoDBTable):
                     elif '/start' in message_lower or '/help' in message_lower:
                         await bot.send_message(effective_chat_id, reply_to_message_id=update.effective_message.message_id, text=TELEGRAM_WELCOME_MESSAGE)
                     else:
-                        await bot.send_message(effective_chat_id, reply_to_message_id=update.effective_message.message_id, text="I don't understand this command. Available commands are 'subscribe' and 'unsubscribe'.")
+                        await bot.send_message(effective_chat_id, reply_to_message_id=update.effective_message.message_id, text="I don't understand this command. Please use `/help` to see a list of available commands.")
                 elif update.my_chat_member:
                     # The bot's chat member status was updated in a chat
                     await bot.send_message(effective_chat_id, text=TELEGRAM_WELCOME_MESSAGE)
@@ -122,11 +123,12 @@ async def send_telegram_updates_async(
         [format_changes_for_telegram(ch) for ch in changes_list],
         [format_schedule_for_telegram(c, e) for c, e in zip(
             event_configs, cal_entries_list)],
+        [f"------------\n[Bot source code]({SOURCE_CODE_URL})"],
     ])))
 
     async with bot:
         for chat_id in subscribers:
-            await bot.send_message(chat_id, text=message, parse_mode=telegram.constants.ParseMode.MARKDOWN)
+            await bot.send_message(chat_id, text=message, parse_mode=telegram.constants.ParseMode.MARKDOWN, disable_web_page_preview=True)
 
     return []
 

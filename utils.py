@@ -7,10 +7,13 @@ import boto3
 import dateutil.parser
 import pytz
 
+SOURCE_CODE_URL = "https://github.com/ben-z/uwaterloo-facility-notifier"
+
 TZ = pytz.timezone('US/Eastern')
 FACILITY_WEB_UI_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetSchedule?facilityId={facilityId}"
 CALENDAR_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetScheduleCustomAppointments?selectedId={facilityId}&start={start}&end={end}"
 
+DYNAMODB_TABLE_NAME=os.environ.get('DYNAMODB_TABLE_NAME', 'uwaterloo-facility-notifier-db')
 
 @dataclass(frozen=True)
 class EventConfig():

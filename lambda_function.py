@@ -8,11 +8,9 @@ import requests
 
 from discord_utils import send_discord_message
 from telegram_utils import refresh_telegram_subscribers, send_telegram_updates
-from utils import (CALENDAR_URL_FORMATTER, TZ, ChangeType, DynamoDBTable,
-                   EventChanges, EventConfig, ReqParam, TimeRange,
-                   strftime_end_of_day, strftime_start_of_day)
-
-DYNAMODB_TABLE_NAME = "uwaterloo-facility-notifier-db"
+from utils import (CALENDAR_URL_FORMATTER, DYNAMODB_TABLE_NAME, TZ, ChangeType,
+                   DynamoDBTable, EventChanges, EventConfig, ReqParam,
+                   TimeRange, strftime_end_of_day, strftime_start_of_day)
 
 event_configs: List[EventConfig] = [
     EventConfig(**{
