@@ -1,7 +1,15 @@
-import boto3
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Mapping
+
+import boto3
 import dateutil.parser
+import pytz
+
+TZ = pytz.timezone('US/Eastern')
+FACILITY_WEB_UI_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetSchedule?facilityId={facilityId}"
+CALENDAR_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetScheduleCustomAppointments?selectedId={facilityId}&start={start}&end={end}"
 
 
 @dataclass(frozen=True)
@@ -16,6 +24,24 @@ class EventConfig():
     event_filter: callable
 
 
+class ChangeType(str, Enum):
+    NEW = "NEW"
+    CANCELLED = "CANCELLED"
+
+
+@dataclass(frozen=True)
+class TimeRange:
+    # start and end should be parsable by dateutil.parser.parse
+    start: str
+    end: str
+
+
+@dataclass(frozen=True)
+class EventChanges:
+    event_config: EventConfig
+    changes: Mapping[ChangeType, List[TimeRange]]
+
+
 @dataclass(frozen=True)
 class ReqParam():
     """
@@ -28,6 +54,14 @@ class ReqParam():
 
 def flatten(l):
     return [item for sublist in l for item in sublist]
+
+
+def strftime_start_of_day(t):
+    return t.strftime('%Y-%m-%dT00:00:00%z')
+
+
+def strftime_end_of_day(t):
+    return t.strftime('%Y-%m-%dT23:59:59%z')
 
 
 def pretty_print_time_range(start: str, end: str):

@@ -1,23 +1,18 @@
-from datetime import datetime, timedelta
-import dateutil.parser
-import json
-import pytz
-import os
-import requests
 import concurrent.futures
+import json
+from datetime import datetime, timedelta
 from typing import List
-from utils import DynamoDBTable, ReqParam, EventConfig, pretty_print_time_range, flatten
 
-TZ = pytz.timezone('US/Eastern')
-FACILITY_WEB_UI_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetSchedule?facilityId={facilityId}"
-CALENDAR_URL_FORMATTER = "https://warrior.uwaterloo.ca/Facility/GetScheduleCustomAppointments?selectedId={facilityId}&start={start}&end={end}"
-DISCORD_WEBHOOK_URLS = os.environ['DISCORD_WEBHOOK_URLS'].split(",")
+import dateutil.parser
+import requests
+
+from discord_utils import send_discord_message
+from telegram_utils import refresh_telegram_subscribers, send_telegram_updates
+from utils import (CALENDAR_URL_FORMATTER, TZ, ChangeType, DynamoDBTable,
+                   EventChanges, EventConfig, ReqParam, TimeRange,
+                   strftime_end_of_day, strftime_start_of_day)
 
 DYNAMODB_TABLE_NAME = "uwaterloo-facility-notifier-db"
-
-BOT_USERNAME = "sk8rgoose"
-BOT_AVATAR_URL = "https://i.imgur.com/7OMGH86.png"
-
 
 event_configs: List[EventConfig] = [
     EventConfig(**{
@@ -56,98 +51,18 @@ def get_calendar_data(rp: ReqParam):
     return r.json()
 
 
-def get_event_changes(event_config: EventConfig, stored_cal_entries: List, current_cal_entries: List, now: datetime):
-    event_name = event_config.event_name
-    facility_name = event_config.facility_name
-
+def get_event_changes(event_config: EventConfig, stored_cal_entries: List, current_cal_entries: List, now: datetime) -> EventChanges:
     deleted_upcoming_entries = [e for e in stored_cal_entries if e not in current_cal_entries and dateutil.parser.parse(
         e['start']) > now.replace(tzinfo=None)]
     new_upcoming_entries = [e for e in current_cal_entries if e not in stored_cal_entries and dateutil.parser.parse(
         e['start']) > now.replace(tzinfo=None)]
 
-    changes = []
-
-    if deleted_upcoming_entries:
-        changes.append(
-            {
-                "fields": [
-                    {
-                        "name": f"Cancelled {event_name} Sessions at {facility_name}",
-                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in deleted_upcoming_entries]),
-                    },
-                ],
-                'color': '16711680',  # red
-                "timestamp": now.isoformat(),
-            }
-        )
-
-    if new_upcoming_entries:
-        changes.append(
-            {
-                'fields': [
-                    {
-                        "name": f"New {event_name} Sessions at {facility_name}",
-                        "value": "".join([f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in new_upcoming_entries]),
-                    }
-                ],
-                'color': '65280',  # green
-                "timestamp": now.isoformat(),
-            }
-        )
+    changes = EventChanges(event_config=event_config, changes={
+        ChangeType.CANCELLED: [TimeRange(e['start'], e['end']) for e in deleted_upcoming_entries],
+        ChangeType.NEW: [TimeRange(e['start'], e['end']) for e in new_upcoming_entries],
+    })
 
     return changes
-
-
-def send_discord_message(changes_list: List, event_configs: List[EventConfig], cal_entries_list: List[List], now: datetime):
-    cal_entries_embeds = [
-        {
-            "fields": [
-                {
-                    "name": f"{c.event_name} sessions at {c.facility_name} in the next {c.lookahead_days} days",
-                    "value": "".join(f"{pretty_print_time_range(e['start'],e['end'])}\n" for e in cal_entries),
-                    "color": 1127128
-                },
-                {
-                    "name": "",
-                    "value": f"Check the [facility schedule]({FACILITY_WEB_UI_URL_FORMATTER.format(facilityId=c.facility_id)})",
-                },
-            ],
-            "timestamp": now.isoformat(),
-        }
-        for c, cal_entries in zip(event_configs, cal_entries_list)
-    ]
-
-    errors = []
-    for webhook_url in DISCORD_WEBHOOK_URLS:
-        r = requests.post(webhook_url, json={
-            "username": BOT_USERNAME,
-            "avatar_url": BOT_AVATAR_URL,
-            "embeds": [
-                {
-                    "author": {
-                        "name": f"{BOT_USERNAME} has an update!",
-                        "icon_url": BOT_AVATAR_URL,
-                    },
-                },
-                *flatten(changes_list),
-                *cal_entries_embeds,
-            ],
-        })
-        if r.status_code != 204:
-            errors.append({
-                'message': f'Error: could not send Discord message (status code {r.status_code}, webhook url {webhook_url})',
-                'error': r.text,
-            })
-
-    return errors
-
-
-def strftime_start_of_day(t):
-    return t.strftime('%Y-%m-%dT00:00:00%z')
-
-
-def strftime_end_of_day(t):
-    return t.strftime('%Y-%m-%dT23:59:59%z')
 
 
 def get_stored_calendar_entries(event_config: EventConfig, table: DynamoDBTable):
@@ -163,11 +78,17 @@ def filter_calendar_entries(event_config: EventConfig, cal_entries: List):
     return [e for e in cal_entries if event_config.event_filter(e)]
 
 
+def has_changes(changes_list: List[EventChanges]):
+    return any([sum(len(v) for v in changes.changes.values()) > 0 for changes in changes_list])
+
+
 def lambda_handler(event, context):
     # current time in the timezone TZ
     now = datetime.now(TZ)
 
     table = DynamoDBTable(DYNAMODB_TABLE_NAME)
+
+    telegram_subscribers = refresh_telegram_subscribers(table)
 
     # construct the parameters for all of the API requests
     start = strftime_start_of_day(now)
@@ -200,6 +121,7 @@ def lambda_handler(event, context):
 
     current_cal_entries_list = [filter_calendar_entries(
         c, calendar_data[p]) for c, p in zip(event_configs, req_params)]
+    # a list of changes per event
     changes_list = [
         get_event_changes(c, stored, current, now)
         for c, stored, current
@@ -207,10 +129,12 @@ def lambda_handler(event, context):
     ]
 
     errors = []
-    if any(changes_list):
-        # send a message to discord
+    if has_changes(changes_list):
+        # send notifications
         errors.extend(send_discord_message(
             changes_list, event_configs, current_cal_entries_list, now))
+        errors.extend(send_telegram_updates(telegram_subscribers,
+                      changes_list, event_configs, current_cal_entries_list))
 
     if errors:
         return {
@@ -227,7 +151,7 @@ def lambda_handler(event, context):
 
     return {
         'statusCode': 200,
-        'body': json.dumps({'message': 'Success', 'message_sent': any(changes_list)})
+        'body': json.dumps({'message': 'Success', 'has_changes': has_changes(changes_list)})
     }
 
 
