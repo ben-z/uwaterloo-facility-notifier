@@ -2,7 +2,13 @@
 
 Lambda function to send Discord/Telegram notifications when the UWaterloo facility calendar changes
 
+Discord example:
 <img width="453" alt="image" src="https://user-images.githubusercontent.com/5977478/214961417-269239d0-7453-403e-962f-5e0a13f14d1a.png">
+
+Telegram example:
+![image](https://user-images.githubusercontent.com/5977478/221892890-ebe99657-fbb3-4bf7-b6c4-848e053e480e.jpeg)
+
+
 
 ### Testing
 
